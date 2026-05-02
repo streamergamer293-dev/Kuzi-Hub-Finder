@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
+local UIS = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local placeId = game.PlaceId
@@ -8,186 +9,221 @@ local placeId = game.PlaceId
 local gui = Instance.new("ScreenGui", game.CoreGui)
 gui.Name = "KuziFinder"
 
-local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 340, 0, 380)
-frame.Position = UDim2.new(0.5, -170, 0.5, -190)
-frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
-Instance.new("UICorner", frame)
+local main = Instance.new("Frame", gui)
+main.Size = UDim2.new(0, 340, 0, 400)
+main.Position = UDim2.new(0.5, -170, 0.5, -200)
+main.BackgroundColor3 = Color3.fromRGB(20,20,20)
+main.Active = true
+Instance.new("UICorner", main)
 
-local title = Instance.new("TextLabel", frame)
+local dragging, dragInput, dragStart, startPos
+
+local function update(input)
+	local delta = input.Position - dragStart
+	main.Position = UDim2.new(
+		startPos.X.Scale,
+		startPos.X.Offset + delta.X,
+		startPos.Y.Scale,
+		startPos.Y.Offset + delta.Y
+	)
+end
+
+main.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = main.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+main.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		dragInput = input
+	end
+end)
+
+UIS.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		update(input)
+	end
+end)
+
+local toggleBtn = Instance.new("TextButton", gui)
+toggleBtn.Size = UDim2.new(0,100,0,30)
+toggleBtn.Position = UDim2.new(0,10,0.5,0)
+toggleBtn.Text = "Kuzi Finder"
+toggleBtn.BackgroundColor3 = Color3.fromRGB(30,30,30)
+
+local opened = true
+toggleBtn.MouseButton1Click:Connect(function()
+	opened = not opened
+	main.Visible = opened
+end)
+
+local title = Instance.new("TextLabel", main)
 title.Size = UDim2.new(1,0,0,30)
 title.BackgroundTransparency = 1
-title.Text = "Kuzi Finder v2"
+title.Text = "Kuzi Finder"
 title.TextColor3 = Color3.new(1,1,1)
 
-local status = Instance.new("TextLabel", frame)
+local status = Instance.new("TextLabel", main)
 status.Size = UDim2.new(1,0,0,20)
 status.Position = UDim2.new(0,0,0,30)
 status.BackgroundTransparency = 1
 
-local running = false
-local visited = {}
+local info = Instance.new("TextLabel", main)
+info.Size = UDim2.new(1,0,0,20)
+info.Position = UDim2.new(0,0,0,50)
+info.BackgroundTransparency = 1
+info.TextColor3 = Color3.fromRGB(200,200,200)
 
-local function updateStatus()
-    if running then
-        status.Text = "● Auto: ON"
-        status.TextColor3 = Color3.fromRGB(0,255,0)
-    else
-        status.Text = "● Auto: OFF"
-        status.TextColor3 = Color3.fromRGB(255,0,0)
-    end
+local running = false
+
+local function updateStatus(text, color)
+	status.Text = text
+	status.TextColor3 = color
 end
 
-updateStatus()
+updateStatus("● Auto: OFF", Color3.fromRGB(255,0,0))
 
-local startBtn = Instance.new("TextButton", frame)
-startBtn.Size = UDim2.new(0.4,0,0,30)
-startBtn.Position = UDim2.new(0.1,0,0,55)
+local startBtn = Instance.new("TextButton", main)
+startBtn.Size = UDim2.new(0.3,0,0,30)
+startBtn.Position = UDim2.new(0.05,0,0,75)
 startBtn.Text = "Start"
 
-local stopBtn = Instance.new("TextButton", frame)
-stopBtn.Size = UDim2.new(0.4,0,0,30)
-stopBtn.Position = UDim2.new(0.5,0,0,55)
+local stopBtn = Instance.new("TextButton", main)
+stopBtn.Size = UDim2.new(0.3,0,0,30)
+stopBtn.Position = UDim2.new(0.35,0,0,75)
 stopBtn.Text = "Stop"
 
-local refreshBtn = Instance.new("TextButton", frame)
-refreshBtn.Size = UDim2.new(0.8,0,0,25)
-refreshBtn.Position = UDim2.new(0.1,0,0,90)
-refreshBtn.Text = "Scan Targets"
+local scanBtn = Instance.new("TextButton", main)
+scanBtn.Size = UDim2.new(0.3,0,0,30)
+scanBtn.Position = UDim2.new(0.65,0,0,75)
+scanBtn.Text = "Scan"
 
-local infoLabel = Instance.new("TextLabel", frame)
-infoLabel.Size = UDim2.new(1,0,0,20)
-infoLabel.Position = UDim2.new(0,0,0,120)
-infoLabel.BackgroundTransparency = 1
-infoLabel.TextColor3 = Color3.fromRGB(200,200,200)
-infoLabel.Text = "Targets: 0"
+local list = Instance.new("ScrollingFrame", main)
+list.Size = UDim2.new(0.9,0,0,240)
+list.Position = UDim2.new(0.05,0,0,110)
+list.BackgroundColor3 = Color3.fromRGB(30,30,30)
+list.CanvasSize = UDim2.new(0,0,0,0)
+Instance.new("UICorner", list)
 
-local listFrame = Instance.new("ScrollingFrame", frame)
-listFrame.Size = UDim2.new(0.9,0,0,200)
-listFrame.Position = UDim2.new(0.05,0,0,145)
-listFrame.CanvasSize = UDim2.new(0,0,0,0)
-listFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
-Instance.new("UICorner", listFrame)
+Instance.new("UIListLayout", list)
 
-Instance.new("UIListLayout", listFrame)
+local function clear()
+	for _,v in pairs(list:GetChildren()) do
+		if v:IsA("Frame") then v:Destroy() end
+	end
+end
 
-local function clearList()
-    for _, v in pairs(listFrame:GetChildren()) do
-        if v:IsA("Frame") then
-            v:Destroy()
-        end
-    end
+local function getBrainrots()
+	local found = {}
+
+	for _,v in pairs(game:GetDescendants()) do
+		if v:IsA("Model") or v:IsA("Folder") then
+			local n = string.lower(v.Name)
+			if string.find(n,"brainrot") or string.find(n,"coco") or string.find(n,"frigo") then
+				table.insert(found, v.Name)
+			end
+		end
+	end
+
+	return found
 end
 
 local function getServers()
-    local success, result = pcall(function()
-        return HttpService:JSONDecode(game:HttpGet(
-            "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Asc&limit=100"
-        ))
-    end)
+	local success, result = pcall(function()
+		return HttpService:JSONDecode(game:HttpGet(
+			"https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Asc&limit=100"
+		))
+	end)
 
-    if success and result and result.data then
-        return result.data
-    end
+	if success and result and result.data then
+		return result.data
+	end
 
-    return {}
+	return {}
 end
 
-local function scoreServer(s)
-    return s.playing
+local function renderBrainrots()
+	clear()
+
+	local data = getBrainrots()
+	info.Text = "Brainrots: "..#data
+
+	for _,name in pairs(data) do
+		local f = Instance.new("Frame", list)
+		f.Size = UDim2.new(1,0,0,40)
+		f.BackgroundColor3 = Color3.fromRGB(25,25,25)
+		Instance.new("UICorner", f)
+
+		local txt = Instance.new("TextLabel", f)
+		txt.Size = UDim2.new(0.6,0,1,0)
+		txt.BackgroundTransparency = 1
+		txt.Text = name
+		txt.TextColor3 = Color3.new(1,1,1)
+		txt.TextXAlignment = Enum.TextXAlignment.Left
+
+		local join = Instance.new("TextButton", f)
+		join.Size = UDim2.new(0.2,0,0.7,0)
+		join.Position = UDim2.new(0.6,5,0.15,0)
+		join.Text = "JOIN"
+
+		local force = Instance.new("TextButton", f)
+		force.Size = UDim2.new(0.2,0,0.7,0)
+		force.Position = UDim2.new(0.8,5,0.15,0)
+		force.Text = "FORCE"
+
+		join.MouseButton1Click:Connect(function()
+			print("Join:", name)
+		end)
+
+		force.MouseButton1Click:Connect(function()
+			print("Force:", name)
+		end)
+	end
+
+	list.CanvasSize = UDim2.new(0,0,0,#data*45)
 end
 
-local function getBestServers()
-    local servers = getServers()
-
-    table.sort(servers, function(a,b)
-        return scoreServer(a) < scoreServer(b)
-    end)
-
-    local result = {}
-    for _, s in pairs(servers) do
-        if not visited[s.id] then
-            table.insert(result, s)
-        end
-        if #result >= 5 then break end
-    end
-
-    return result
-end
-
-local function createItem(server)
-    local container = Instance.new("Frame", listFrame)
-    container.Size = UDim2.new(1,0,0,40)
-    container.BackgroundColor3 = Color3.fromRGB(25,25,25)
-    Instance.new("UICorner", container)
-
-    local name = Instance.new("TextLabel", container)
-    name.Size = UDim2.new(0.5,0,1,0)
-    name.BackgroundTransparency = 1
-    name.Text = "Players: "..server.playing
-    name.TextColor3 = Color3.new(1,1,1)
-    name.TextXAlignment = Enum.TextXAlignment.Left
-
-    local value = Instance.new("TextLabel", container)
-    value.Size = UDim2.new(0.2,0,1,0)
-    value.Position = UDim2.new(0.5,0,0,0)
-    value.BackgroundTransparency = 1
-    value.Text = "Score: "..scoreServer(server)
-    value.TextColor3 = Color3.fromRGB(0,255,0)
-
-    local joinBtn = Instance.new("TextButton", container)
-    joinBtn.Size = UDim2.new(0.15,0,0.7,0)
-    joinBtn.Position = UDim2.new(0.7,5,0.15,0)
-    joinBtn.Text = "JOIN"
-
-    local forceBtn = Instance.new("TextButton", container)
-    forceBtn.Size = UDim2.new(0.15,0,0.7,0)
-    forceBtn.Position = UDim2.new(0.85,5,0.15,0)
-    forceBtn.Text = "FORCE"
-
-    joinBtn.MouseButton1Click:Connect(function()
-        visited[server.id] = true
-        TeleportService:TeleportToPlaceInstance(placeId, server.id, player)
-    end)
-
-    forceBtn.MouseButton1Click:Connect(function()
-        TeleportService:TeleportToPlaceInstance(placeId, server.id, player)
-    end)
-end
-
-local function refreshTargets()
-    clearList()
-    local servers = getBestServers()
-    infoLabel.Text = "Targets: "..#servers
-
-    for _, s in pairs(servers) do
-        createItem(s)
-    end
-
-    listFrame.CanvasSize = UDim2.new(0,0,0,#servers * 45)
-end
-
-refreshBtn.MouseButton1Click:Connect(refreshTargets)
+scanBtn.MouseButton1Click:Connect(renderBrainrots)
 
 task.spawn(function()
-    while true do
-        if running then
-            local servers = getBestServers()
-            if servers[1] then
-                visited[servers[1].id] = true
-                TeleportService:TeleportToPlaceInstance(placeId, servers[1].id, player)
-            end
-        end
-        task.wait(8)
-    end
+	while true do
+		task.wait(5)
+
+		if running then
+			local found = getBrainrots()
+
+			if #found > 0 then
+				updateStatus("✔ Found Brainrot!", Color3.fromRGB(0,255,0))
+			else
+				updateStatus("Searching...", Color3.fromRGB(255,255,0))
+
+				local servers = getServers()
+				for _,s in pairs(servers) do
+					if s.playing < s.maxPlayers then
+						TeleportService:TeleportToPlaceInstance(placeId, s.id, player)
+						break
+					end
+				end
+			end
+		end
+	end
 end)
 
 startBtn.MouseButton1Click:Connect(function()
-    running = true
-    updateStatus()
+	running = true
+	updateStatus("● Auto: ON", Color3.fromRGB(0,255,0))
 end)
 
 stopBtn.MouseButton1Click:Connect(function()
-    running = false
-    updateStatus()
+	running = false
+	updateStatus("● Auto: OFF", Color3.fromRGB(255,0,0))
 end)
