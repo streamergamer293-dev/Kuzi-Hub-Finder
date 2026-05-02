@@ -1,0 +1,193 @@
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+
+local player = Players.LocalPlayer
+local placeId = game.PlaceId
+
+local gui = Instance.new("ScreenGui", game.CoreGui)
+gui.Name = "KuziFinder"
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 340, 0, 380)
+frame.Position = UDim2.new(0.5, -170, 0.5, -190)
+frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+Instance.new("UICorner", frame)
+
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1,0,0,30)
+title.BackgroundTransparency = 1
+title.Text = "Kuzi Finder v2"
+title.TextColor3 = Color3.new(1,1,1)
+
+local status = Instance.new("TextLabel", frame)
+status.Size = UDim2.new(1,0,0,20)
+status.Position = UDim2.new(0,0,0,30)
+status.BackgroundTransparency = 1
+
+local running = false
+local visited = {}
+
+local function updateStatus()
+    if running then
+        status.Text = "● Auto: ON"
+        status.TextColor3 = Color3.fromRGB(0,255,0)
+    else
+        status.Text = "● Auto: OFF"
+        status.TextColor3 = Color3.fromRGB(255,0,0)
+    end
+end
+
+updateStatus()
+
+local startBtn = Instance.new("TextButton", frame)
+startBtn.Size = UDim2.new(0.4,0,0,30)
+startBtn.Position = UDim2.new(0.1,0,0,55)
+startBtn.Text = "Start"
+
+local stopBtn = Instance.new("TextButton", frame)
+stopBtn.Size = UDim2.new(0.4,0,0,30)
+stopBtn.Position = UDim2.new(0.5,0,0,55)
+stopBtn.Text = "Stop"
+
+local refreshBtn = Instance.new("TextButton", frame)
+refreshBtn.Size = UDim2.new(0.8,0,0,25)
+refreshBtn.Position = UDim2.new(0.1,0,0,90)
+refreshBtn.Text = "Scan Targets"
+
+local infoLabel = Instance.new("TextLabel", frame)
+infoLabel.Size = UDim2.new(1,0,0,20)
+infoLabel.Position = UDim2.new(0,0,0,120)
+infoLabel.BackgroundTransparency = 1
+infoLabel.TextColor3 = Color3.fromRGB(200,200,200)
+infoLabel.Text = "Targets: 0"
+
+local listFrame = Instance.new("ScrollingFrame", frame)
+listFrame.Size = UDim2.new(0.9,0,0,200)
+listFrame.Position = UDim2.new(0.05,0,0,145)
+listFrame.CanvasSize = UDim2.new(0,0,0,0)
+listFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+Instance.new("UICorner", listFrame)
+
+Instance.new("UIListLayout", listFrame)
+
+local function clearList()
+    for _, v in pairs(listFrame:GetChildren()) do
+        if v:IsA("Frame") then
+            v:Destroy()
+        end
+    end
+end
+
+local function getServers()
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(game:HttpGet(
+            "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Asc&limit=100"
+        ))
+    end)
+
+    if success and result and result.data then
+        return result.data
+    end
+
+    return {}
+end
+
+local function scoreServer(s)
+    return s.playing
+end
+
+local function getBestServers()
+    local servers = getServers()
+
+    table.sort(servers, function(a,b)
+        return scoreServer(a) < scoreServer(b)
+    end)
+
+    local result = {}
+    for _, s in pairs(servers) do
+        if not visited[s.id] then
+            table.insert(result, s)
+        end
+        if #result >= 5 then break end
+    end
+
+    return result
+end
+
+local function createItem(server)
+    local container = Instance.new("Frame", listFrame)
+    container.Size = UDim2.new(1,0,0,40)
+    container.BackgroundColor3 = Color3.fromRGB(25,25,25)
+    Instance.new("UICorner", container)
+
+    local name = Instance.new("TextLabel", container)
+    name.Size = UDim2.new(0.5,0,1,0)
+    name.BackgroundTransparency = 1
+    name.Text = "Players: "..server.playing
+    name.TextColor3 = Color3.new(1,1,1)
+    name.TextXAlignment = Enum.TextXAlignment.Left
+
+    local value = Instance.new("TextLabel", container)
+    value.Size = UDim2.new(0.2,0,1,0)
+    value.Position = UDim2.new(0.5,0,0,0)
+    value.BackgroundTransparency = 1
+    value.Text = "Score: "..scoreServer(server)
+    value.TextColor3 = Color3.fromRGB(0,255,0)
+
+    local joinBtn = Instance.new("TextButton", container)
+    joinBtn.Size = UDim2.new(0.15,0,0.7,0)
+    joinBtn.Position = UDim2.new(0.7,5,0.15,0)
+    joinBtn.Text = "JOIN"
+
+    local forceBtn = Instance.new("TextButton", container)
+    forceBtn.Size = UDim2.new(0.15,0,0.7,0)
+    forceBtn.Position = UDim2.new(0.85,5,0.15,0)
+    forceBtn.Text = "FORCE"
+
+    joinBtn.MouseButton1Click:Connect(function()
+        visited[server.id] = true
+        TeleportService:TeleportToPlaceInstance(placeId, server.id, player)
+    end)
+
+    forceBtn.MouseButton1Click:Connect(function()
+        TeleportService:TeleportToPlaceInstance(placeId, server.id, player)
+    end)
+end
+
+local function refreshTargets()
+    clearList()
+    local servers = getBestServers()
+    infoLabel.Text = "Targets: "..#servers
+
+    for _, s in pairs(servers) do
+        createItem(s)
+    end
+
+    listFrame.CanvasSize = UDim2.new(0,0,0,#servers * 45)
+end
+
+refreshBtn.MouseButton1Click:Connect(refreshTargets)
+
+task.spawn(function()
+    while true do
+        if running then
+            local servers = getBestServers()
+            if servers[1] then
+                visited[servers[1].id] = true
+                TeleportService:TeleportToPlaceInstance(placeId, servers[1].id, player)
+            end
+        end
+        task.wait(8)
+    end
+end)
+
+startBtn.MouseButton1Click:Connect(function()
+    running = true
+    updateStatus()
+end)
+
+stopBtn.MouseButton1Click:Connect(function()
+    running = false
+    updateStatus()
+end)
