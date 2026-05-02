@@ -10,8 +10,8 @@ local gui = Instance.new("ScreenGui", game.CoreGui)
 gui.Name = "KuziFinder"
 
 local main = Instance.new("Frame", gui)
-main.Size = UDim2.new(0, 340, 0, 400)
-main.Position = UDim2.new(0.5, -170, 0.5, -200)
+main.Size = UDim2.new(0, 320, 0, 300)
+main.Position = UDim2.new(0.5, -160, 0.5, -150)
 main.BackgroundColor3 = Color3.fromRGB(20,20,20)
 main.Active = true
 Instance.new("UICorner", main)
@@ -35,6 +35,112 @@ main.InputBegan:Connect(function(input)
 		startPos = main.Position
 
 		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+main.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		dragInput = input
+	end
+end)
+
+UIS.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		update(input)
+	end
+end)
+
+local toggleBtn = Instance.new("TextButton", gui)
+toggleBtn.Size = UDim2.new(0,100,0,30)
+toggleBtn.Position = UDim2.new(0,10,0.5,0)
+toggleBtn.Text = "Kuzi Finder"
+toggleBtn.BackgroundColor3 = Color3.fromRGB(30,30,30)
+
+local opened = true
+toggleBtn.MouseButton1Click:Connect(function()
+	opened = not opened
+	main.Visible = opened
+end)
+
+local title = Instance.new("TextLabel", main)
+title.Size = UDim2.new(1,0,0,30)
+title.BackgroundTransparency = 1
+title.Text = "Kuzi Finder"
+title.TextColor3 = Color3.new(1,1,1)
+
+local status = Instance.new("TextLabel", main)
+status.Size = UDim2.new(1,0,0,20)
+status.Position = UDim2.new(0,0,0,30)
+status.BackgroundTransparency = 1
+
+local running = false
+
+local function updateStatus()
+	if running then
+		status.Text = "● Auto: ON"
+		status.TextColor3 = Color3.fromRGB(0,255,0)
+	else
+		status.Text = "● Auto: OFF"
+		status.TextColor3 = Color3.fromRGB(255,0,0)
+	end
+end
+
+updateStatus()
+
+local startBtn = Instance.new("TextButton", main)
+startBtn.Size = UDim2.new(0.4,0,0,30)
+startBtn.Position = UDim2.new(0.1,0,0,70)
+startBtn.Text = "Start"
+
+local stopBtn = Instance.new("TextButton", main)
+stopBtn.Size = UDim2.new(0.4,0,0,30)
+stopBtn.Position = UDim2.new(0.5,0,0,70)
+stopBtn.Text = "Stop"
+
+local function getServers()
+	local success, result = pcall(function()
+		return HttpService:JSONDecode(game:HttpGet(
+			"https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Asc&limit=50"
+		))
+	end)
+
+	if success and result and result.data then
+		return result.data
+	end
+
+	return {}
+end
+
+task.spawn(function()
+	while true do
+		task.wait(8)
+
+		if running then
+			local servers = getServers()
+
+			for _,s in pairs(servers) do
+				if s.playing < s.maxPlayers then
+					TeleportService:TeleportToPlaceInstance(placeId, s.id, player)
+					break
+				end
+			end
+		end
+	end
+end)
+
+startBtn.MouseButton1Click:Connect(function()
+	running = true
+	updateStatus()
+end)
+
+stopBtn.MouseButton1Click:Connect(function()
+	running = false
+	updateStatus()
+end)		input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then
 				dragging = false
 			end
